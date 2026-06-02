@@ -991,20 +991,49 @@ function updateUserBadge(){
 let firebaseDB = null;
 let fbSyncing  = false;
 
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDEDFJlTdDKSw_vq6_CXVg0CsbhIKBSQrY",
+  authDomain: "nextarg-crm.firebaseapp.com",
+  databaseURL: "https://nextarg-crm-default-rtdb.firebaseio.com",
+  projectId: "nextarg-crm",
+  storageBucket: "nextarg-crm.firebasestorage.app",
+  messagingSenderId: "666453870315",
+  appId: "1:666453870315:web:c17923b1d62b2f9a4060ae"
+};
+
 function initFirebaseSync(){
-  const cfg = localStorage.getItem('nextarg_firebase_config');
-  if(!cfg) return; // Firebase não configurado — usa localStorage local
   try{
-    const config = JSON.parse(cfg);
-    if(!firebase.apps.length) firebase.initializeApp(config);
+    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     firebaseDB = firebase.database();
     fbSyncing  = true;
-    // Real-time listeners
-    firebaseDB.ref('nextarg/leads').on('value', snap=>{ leads=Object.values(snap.val()||{}); save(); renderAll(); });
-    firebaseDB.ref('nextarg/contracts').on('value', snap=>{ contracts=Object.values(snap.val()||{}); saveCtx(); renderContracts(); });
-    firebaseDB.ref('nextarg/lembretes').on('value', snap=>{ lembretes=Object.values(snap.val()||{}); saveLem(); if(document.getElementById('view-lembretes').classList.contains('active'))renderLembretes(); });
-    showToast('🔥 Sincronizado com Firebase!','success');
-  }catch(e){ console.warn('Firebase config inválida:',e); fbSyncing=false; }
+    // Real-time listeners — sincroniza tudo entre usuários
+    firebaseDB.ref('nextarg/leads').on('value', snap=>{
+      const val = snap.val();
+      leads = val ? Object.values(val) : [];
+      save(); renderAll();
+    });
+    firebaseDB.ref('nextarg/contracts').on('value', snap=>{
+      const val = snap.val();
+      contracts = val ? Object.values(val) : [];
+      saveCtx(); renderContracts();
+    });
+    firebaseDB.ref('nextarg/lembretes').on('value', snap=>{
+      const val = snap.val();
+      lembretes = val ? Object.values(val) : [];
+      saveLem();
+      if(document.getElementById('view-lembretes').classList.contains('active')) renderLembretes();
+    });
+    firebaseDB.ref('nextarg/gmn').on('value', snap=>{
+      const val = snap.val();
+      if(val){
+        const clientes = Object.values(val);
+        localStorage.setItem(GMN_KEY, JSON.stringify(clientes));
+        if(document.getElementById('view-google').classList.contains('active')) renderGmn();
+      }
+    });
+    console.log('🔥 Firebase conectado');
+    showToast('🔥 Dados sincronizados!','success');
+  }catch(e){ console.warn('Firebase erro:',e); fbSyncing=false; }
 }
 
 function fbWrite(path, data){
@@ -1711,7 +1740,14 @@ function loadGmn(){
   }
   return JSON.parse(raw);
 }
-function saveGmn(data){ localStorage.setItem(GMN_KEY, JSON.stringify(data)); }
+function saveGmn(data){
+  localStorage.setItem(GMN_KEY, JSON.stringify(data));
+  if(firebaseDB && fbSyncing){
+    const obj = {};
+    data.forEach(c=>{ obj[c.id]=c; });
+    firebaseDB.ref('nextarg/gmn').set(obj);
+  }
+}
 
 function gmnStatus(inicio){
   if(!inicio) return {label:'Sem Data', cls:'semdata', dias:null};
@@ -1856,21 +1892,4 @@ function deleteGmnCliente(){
   showToast('Cliente removido.','success');
 }
 
-// ════════════════════════════════════════════════════
-// BOOT
-// ════════════════════════════════════════════════════
-// ── BOOT ──────────────────────────────────────────
-if(currentUserId && USERS[currentUserId]){
-  document.getElementById('loginOverlay').style.display='none';
-  updateUserBadge();
-  initFirebaseSync();
-} else {
-  document.getElementById('loginOverlay').style.display='flex';
-}
-renderKanban();
-updateMetrics();
-// fechar modal GMN ao clicar fora
-document.getElementById('gmnModal').addEventListener('click',function(e){if(e.target===this)closeGmnModal();});
-</script>
-</body>
-</html>
+// ═════════�
