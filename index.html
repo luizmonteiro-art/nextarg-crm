@@ -613,7 +613,36 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
       <span class="user-dot" id="userDot"></span>
       <span id="userBadgeName">—</span>
     </div>
+    <button id="fb-sync-btn" onclick="openFbModal()" title="Configurar sincronização Firebase" style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all .18s;" onmouseover="this.style.borderColor='#ff5500';this.style.color='#ff5500'" onmouseout="this.style.borderColor='';this.style.color=''">🔥</button>
     <button class="add-lead-btn" onclick="openModal()">+ Novo Lead</button>
+  </div>
+</div>
+
+<!-- FIREBASE MODAL -->
+<div class="modal-overlay" id="fbModal" style="z-index:1100;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">🔥 Sincronização Firebase</div>
+      <button class="modal-close" onclick="document.getElementById('fbModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6;">Cole abaixo o bloco <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:12px;">firebaseConfig</code> do seu projeto Firebase. Após salvar, os dados de todos os usuários ficarão sincronizados em tempo real.</p>
+      <div id="fb-current-status" style="margin-bottom:12px;"></div>
+      <label style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px;">Config do Firebase</label>
+      <textarea id="fb-config-input" style="width:100%;min-height:180px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:monospace;font-size:12px;outline:none;resize:vertical;transition:border .18s;" placeholder='const firebaseConfig = {
+  apiKey: "...",
+  authDomain: "...",
+  databaseURL: "...",
+  projectId: "...",
+  storageBucket: "...",
+  messagingSenderId: "...",
+  appId: "..."
+};' onfocus="this.style.borderColor=&quot;var(--accent)&quot;" onblur="this.style.borderColor=&quot;&quot;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="clearFirebaseConfig()">🗑 Remover config</button>
+      <button class="btn-save" onclick="saveFirebaseConfig()">💾 Salvar e Sincronizar</button>
+    </div>
   </div>
 </div>
 
@@ -994,22 +1023,14 @@ function updateUserBadge(){
 let firebaseDB = null;
 let fbSyncing  = false;
 
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDEDFJlTdDKSw_vq6_CXVg0CsbhIKBSQrY",
-  authDomain: "nextarg-crm.firebaseapp.com",
-  databaseURL: "https://nextarg-crm-default-rtdb.firebaseio.com",
-  projectId: "nextarg-crm",
-  storageBucket: "nextarg-crm.firebasestorage.app",
-  messagingSenderId: "666453870315",
-  appId: "1:666453870315:web:c17923b1d62b2f9a4060ae"
-};
-
 function initFirebaseSync(){
   try{
-    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    const savedCfg = localStorage.getItem('nextarg_firebase_config');
+    if(!savedCfg) return;
+    const cfg = JSON.parse(savedCfg);
+    if(!firebase.apps.length) firebase.initializeApp(cfg);
     firebaseDB = firebase.database();
     fbSyncing  = true;
-    // Real-time listeners — sincroniza tudo entre usuários
     firebaseDB.ref('nextarg/leads').on('value', snap=>{
       const val = snap.val();
       leads = val ? Object.values(val) : [];
@@ -1029,14 +1050,26 @@ function initFirebaseSync(){
     firebaseDB.ref('nextarg/gmn').on('value', snap=>{
       const val = snap.val();
       if(val){
-        const clientes = Object.values(val);
-        localStorage.setItem(GMN_KEY, JSON.stringify(clientes));
+        localStorage.setItem(GMN_KEY, JSON.stringify(Object.values(val)));
         if(document.getElementById('view-google').classList.contains('active')) renderGmn();
       }
     });
-    console.log('🔥 Firebase conectado');
-    showToast('🔥 Dados sincronizados!','success');
+    showToast('🔥 Sincronizado!','success');
   }catch(e){ console.warn('Firebase erro:',e); fbSyncing=false; }
+}
+
+function saveFirebaseConfig(){
+  const raw = document.getElementById('fb-config-input').value.trim();
+  try{
+    // aceita tanto o objeto JS quanto JSON puro
+    const clean = raw.replace(/^const\s+\w+\s*=\s*/,'').replace(/;\s*$/,'');
+    const cfg = Function('return '+clean)();
+    if(!cfg.apiKey || !cfg.databaseURL) throw new Error('Config incompleta');
+    localStorage.setItem('nextarg_firebase_config', JSON.stringify(cfg));
+    document.getElementById('fbModal').classList.remove('open');
+    showToast('Firebase configurado! Recarregando...','success');
+    setTimeout(()=>location.reload(), 1200);
+  }catch(e){ showToast('Config inválida. Verifique e tente novamente.','error'); }
 }
 
 function fbWrite(path, data){
@@ -1851,65 +1884,4 @@ function openGmnModal(id){
       document.getElementById('gf-cidade').value = c.cidade||'';
       document.getElementById('gf-plano').value = c.plano||'';
       document.getElementById('gf-valor').value = c.valor||'';
-      document.getElementById('gf-inicio').value = c.inicio||'';
-      document.getElementById('gf-whatsapp').value = c.whatsapp||'';
-      document.getElementById('gf-obs').value = c.obs||'';
-    }
-  } else {
-    ['gf-nome','gf-segmento','gf-cidade','gf-plano','gf-valor','gf-inicio','gf-whatsapp','gf-obs'].forEach(id=>document.getElementById(id).value='');
-  }
-  modal.classList.add('open');
-}
-function closeGmnModal(){ document.getElementById('gmnModal').classList.remove('open'); gmnEditId=null; }
-
-function saveGmnCliente(){
-  const nome = document.getElementById('gf-nome').value.trim();
-  if(!nome){ showToast('Informe o nome do cliente!','error'); return; }
-  const novo = {
-    id: gmnEditId || 'gmn_'+Date.now(),
-    nome,
-    segmento: document.getElementById('gf-segmento').value.trim(),
-    cidade: document.getElementById('gf-cidade').value.trim(),
-    plano: document.getElementById('gf-plano').value,
-    valor: parseFloat(document.getElementById('gf-valor').value)||null,
-    inicio: document.getElementById('gf-inicio').value,
-    whatsapp: document.getElementById('gf-whatsapp').value.trim(),
-    obs: document.getElementById('gf-obs').value.trim()
-  };
-  let clientes = loadGmn();
-  if(gmnEditId){ clientes = clientes.map(c=>c.id===gmnEditId?novo:c); }
-  else { clientes.push(novo); }
-  saveGmn(clientes);
-  closeGmnModal();
-  renderGmn();
-  showToast(gmnEditId?'Cliente atualizado!':'Cliente adicionado!','success');
-}
-
-function deleteGmnCliente(){
-  if(!gmnEditId) return;
-  if(!confirm('Excluir este cliente?')) return;
-  let clientes = loadGmn().filter(c=>c.id!==gmnEditId);
-  saveGmn(clientes);
-  closeGmnModal();
-  renderGmn();
-  showToast('Cliente removido.','success');
-}
-
-// ════════════════════════════════════════════════════
-// BOOT
-// ════════════════════════════════════════════════════
-// ── BOOT ──────────────────────────────────────────
-if(currentUserId && USERS[currentUserId]){
-  document.getElementById('loginOverlay').style.display='none';
-  updateUserBadge();
-  initFirebaseSync();
-} else {
-  document.getElementById('loginOverlay').style.display='flex';
-}
-renderKanban();
-updateMetrics();
-// fechar modal GMN ao clicar fora
-document.getElementById('gmnModal').addEventListener('click',function(e){if(e.target===this)closeGmnModal();});
-</script>
-</body>
-</html>
+      document.getElement
