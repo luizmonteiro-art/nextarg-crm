@@ -967,8 +967,11 @@ function loginAs(id){
   localStorage.setItem('nextarg_user', id);
   document.getElementById('loginOverlay').style.display='none';
   updateUserBadge();
-  initFirebaseSync();
+  renderKanban();
+  updateMetrics();
   showToast(`Olá, ${USERS[id].name}! 👋`,'success');
+  // Firebase sync em background (não bloqueia o login)
+  setTimeout(()=>{ try{ initFirebaseSync(); }catch(e){} }, 500);
 }
 
 function logoutUser(){
@@ -1892,4 +1895,21 @@ function deleteGmnCliente(){
   showToast('Cliente removido.','success');
 }
 
-// ═════════�
+// ════════════════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════════════════
+// ── BOOT ──────────────────────────────────────────
+if(currentUserId && USERS[currentUserId]){
+  document.getElementById('loginOverlay').style.display='none';
+  updateUserBadge();
+  initFirebaseSync();
+} else {
+  document.getElementById('loginOverlay').style.display='flex';
+}
+renderKanban();
+updateMetrics();
+// fechar modal GMN ao clicar fora
+document.getElementById('gmnModal').addEventListener('click',function(e){if(e.target===this)closeGmnModal();});
+</script>
+</body>
+</html>
